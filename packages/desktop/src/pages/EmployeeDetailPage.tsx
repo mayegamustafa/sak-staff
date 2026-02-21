@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Briefcase, ArrowLeftRight, BarChart2, BookOpen, FileText, Pencil, Trash2, Upload, Eye, Download, GraduationCap, Camera, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, User, Briefcase, ArrowLeftRight, BarChart2, BookOpen, FileText, Pencil, Trash2, Upload, Eye, Download, GraduationCap, Camera, CreditCard, CheckCircle2, AlertCircle, Printer } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { formatDate, yearsFrom } from '@sak/shared';
 
@@ -45,6 +45,7 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState<Tab>('profile');
+  const [showPrint, setShowPrint] = React.useState(false);
   const { hasPermission } = useAuthStore();
 
   const { data: employee, isLoading } = useQuery({
@@ -94,7 +95,15 @@ export default function EmployeeDetailPage() {
             <Pencil size={13} /> Edit
           </button>
         )}
+        <button
+          onClick={() => setShowPrint(true)}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-emerald-500 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors"
+        >
+          <Printer size={13} /> Print
+        </button>
       </div>
+
+      {showPrint && <PrintProfileModal emp={emp} onClose={() => setShowPrint(false)} />}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
@@ -141,6 +150,265 @@ type EmpShape = {
   emergencyContacts?: { id: string; full_name: string; relationship: string; phone: string }[];
   education?: { id: string; institution: string; qualification: string; field_of_study?: string; year_from: number; year_to: number; grade?: string }[];
 };
+
+// ── Print Profile Modal ───────────────────────────────────────────────────────
+
+function PrintProfileModal({ emp, onClose }: { emp: EmpShape; onClose: () => void }) {
+  const { data: empRecords = [] } = useQuery({
+    queryKey: ['employment', emp.id],
+    queryFn: () => window.sakAPI.employment.getByEmployee(emp.id),
+  });
+  const { data: transfers = [] } = useQuery({
+    queryKey: ['transfers', emp.id],
+    queryFn: () => window.sakAPI.transfers.list({ employeeId: emp.id }),
+  });
+  const { data: performance = [] } = useQuery({
+    queryKey: ['performance', emp.id],
+    queryFn: () => window.sakAPI.performance.list({ employeeId: emp.id }),
+  });
+  const { data: training = [] } = useQuery({
+    queryKey: ['training', emp.id],
+    queryFn: () => window.sakAPI.training.list({ employeeId: emp.id }),
+  });
+
+  const employment = empRecords as { id: string; job_title: string; contract_type: string; status: string; start_date: string; campus_name: string; department_name: string; pay_grade?: string; salaryHistory?: { amount: number; currency: string; effective_date: string }[] }[];
+  const txfers     = transfers  as { id: string; type: string; status: string; from_campus_name: string; to_campus_name: string; effective_date: string; reason: string }[];
+  const appraisals = performance as { id: string; period: string; academic_year: string; overall_score: number; overall_rating: string; conducted_date: string }[];
+  const trainings  = training   as { id: string; title: string; provider: string; type: string; start_date: string; duration_days: number }[];
+
+  const latestEmp = employment.find(e => e.status === 'active') ?? employment[0];
+
+  const doPrint = () => {
+    const fullName = [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(' ');
+    const printDate = new Date().toLocaleDateString('en-UG', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    const row = (label: string, value: string | undefined) =>
+      `<tr><td class="lbl">${label}</td><td class="val">${value || '—'}</td></tr>`;
+
+    const section = (title: string, content: string) =>
+      `<div class="section"><h2>${title}</h2>${content}</div>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Staff Profile — ${fullName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #111; background: #fff; }
+  .page { padding: 20mm 18mm; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2.5px solid #1e40af; padding-bottom: 10px; margin-bottom: 14px; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; }
+  .org-name { font-size: 13pt; font-weight: 700; color: #1e40af; }
+  .org-sub  { font-size: 9pt; color: #555; margin-top: 2px; }
+  .print-date { font-size: 8.5pt; color: #777; text-align: right; }
+
+  /* Staff banner */
+  .banner { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+  .banner-name { font-size: 15pt; font-weight: 700; color: #1e3a8a; }
+  .banner-sub  { font-size: 10pt; color: #2563eb; font-family: monospace; margin-top: 3px; }
+  .banner-meta { font-size: 9.5pt; color: #555; margin-top: 3px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 8.5pt; font-weight: 600; }
+  .badge-active   { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .badge-inactive { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+  /* Sections */
+  .section { margin-bottom: 14px; page-break-inside: avoid; }
+  .section h2 { font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #1e40af; border-bottom: 1px solid #bfdbfe; padding-bottom: 4px; margin-bottom: 8px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  table tr { border-bottom: 1px solid #e5e7eb; }
+  table tr:last-child { border-bottom: none; }
+  td { padding: 4px 4px; vertical-align: top; }
+  td.lbl { color: #6b7280; width: 38%; white-space: nowrap; }
+  td.val { font-weight: 500; color: #111; text-transform: capitalize; }
+
+  /* Record cards */
+  .record { border: 1px solid #e5e7eb; border-radius: 6px; padding: 9px 12px; margin-bottom: 8px; page-break-inside: avoid; }
+  .record-title { font-weight: 700; font-size: 10.5pt; color: #111; }
+  .record-sub   { font-size: 9.5pt; color: #555; margin-top: 2px; }
+  .record-meta  { font-size: 9pt; color: #777; margin-top: 3px; }
+  .score { font-size: 14pt; font-weight: 700; color: #1e40af; }
+
+  /* Footer */
+  .footer { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 8px; display: flex; justify-content: space-between; font-size: 8.5pt; color: #9ca3af; }
+
+  .empty { font-size: 9.5pt; color: #9ca3af; font-style: italic; }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-break { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <img class="logo" src="/sak.jpg" onerror="this.style.display='none'" />
+      <div>
+        <div class="org-name">Sir Apollo Kaggwa Schools</div>
+        <div class="org-sub">Staff Profile Report</div>
+      </div>
+    </div>
+    <div class="print-date">Printed: ${printDate}</div>
+  </div>
+
+  <!-- Staff banner -->
+  <div class="banner">
+    <div>
+      <div class="banner-name">${fullName}</div>
+      <div class="banner-sub">${emp.staff_no}</div>
+      ${latestEmp ? `<div class="banner-meta">${latestEmp.job_title} &nbsp;·&nbsp; ${latestEmp.campus_name} &nbsp;·&nbsp; ${latestEmp.department_name}</div>` : ''}
+    </div>
+    <span class="badge badge-${emp.is_active ? 'active' : 'inactive'}">${emp.is_active ? 'Active' : 'Inactive'}</span>
+  </div>
+
+  <!-- Personal + Contact (two columns) -->
+  <div class="two-col">
+    ${section('Personal Information', `<table>
+      ${row('Gender', emp.gender)}
+      ${row('Date of Birth', emp.date_of_birth ? formatDate(emp.date_of_birth) : undefined)}
+      ${row('Age', emp.date_of_birth ? yearsFrom(emp.date_of_birth) + ' years' : undefined)}
+      ${row('Nationality', emp.nationality)}
+      ${row('National ID', emp.national_id)}
+      ${row('Passport No', emp.passport_no)}
+      ${row('Blood Group', emp.blood_group)}
+      ${row('Marital Status', emp.marital_status)}
+      ${row('Religion', emp.religion)}
+    </table>`)}
+    ${section('Contact Details', `<table>
+      ${row('Phone', emp.phone)}
+      ${row('Phone 2', emp.phone2)}
+      ${row('Email', emp.email)}
+      ${row('Address', emp.residential_address)}
+    </table>`)}
+  </div>
+
+  <!-- Employment -->
+  ${section('Employment History', employment.length === 0
+    ? '<p class="empty">No employment records found.</p>'
+    : employment.map(e => `
+      <div class="record no-break">
+        <div class="record-title">${e.job_title}</div>
+        <div class="record-sub">${e.campus_name} &nbsp;·&nbsp; ${e.department_name}</div>
+        <div class="record-meta">
+          Contract: ${e.contract_type} &nbsp;·&nbsp; Start: ${formatDate(e.start_date)} &nbsp;·&nbsp; Status: ${e.status}
+          ${e.pay_grade ? ' &nbsp;·&nbsp; Grade: ' + e.pay_grade : ''}
+          ${e.salaryHistory?.length ? ' &nbsp;·&nbsp; Salary: ' + e.salaryHistory[0].currency + ' ' + Number(e.salaryHistory[0].amount).toLocaleString() : ''}
+        </div>
+      </div>`).join('')
+  )}
+
+  <!-- Academic / Education -->
+  ${section('Academic / Education', (!emp.education || emp.education.length === 0)
+    ? '<p class="empty">No academic records found.</p>'
+    : emp.education.map(e => `
+      <div class="record no-break">
+        <div class="record-title">${e.qualification}</div>
+        <div class="record-sub">${e.institution}${e.field_of_study ? ' &nbsp;·&nbsp; ' + e.field_of_study : ''}</div>
+        <div class="record-meta">${e.year_from} – ${e.year_to}${e.grade ? ' &nbsp;·&nbsp; ' + e.grade : ''}</div>
+      </div>`).join('')
+  )}
+
+  <!-- Transfers -->
+  ${txfers.length > 0 ? section('Transfer / Deployment History', txfers.map(t => `
+    <div class="record no-break">
+      <div class="record-title" style="text-transform:capitalize">${t.type}</div>
+      <div class="record-sub">${t.from_campus_name} → ${t.to_campus_name}</div>
+      <div class="record-meta">Effective: ${formatDate(t.effective_date)} &nbsp;·&nbsp; Status: ${t.status}</div>
+      ${t.reason ? `<div class="record-meta">${t.reason}</div>` : ''}
+    </div>`).join('')
+  ) : ''}
+
+  <!-- Performance -->
+  ${appraisals.length > 0 ? section('Performance Appraisals', appraisals.map(a => `
+    <div class="record no-break" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="record-title" style="text-transform:capitalize">${a.period.replace('_', ' ')} — ${a.academic_year}</div>
+        <div class="record-sub">${formatDate(a.conducted_date)} &nbsp;·&nbsp; ${a.overall_rating}</div>
+      </div>
+      <div class="score">${Number(a.overall_score).toFixed(1)}<span style="font-size:9pt;font-weight:400;color:#555">/5</span></div>
+    </div>`).join('')
+  ) : ''}
+
+  <!-- Training -->
+  ${trainings.length > 0 ? section('Training & Development', trainings.map(t => `
+    <div class="record no-break">
+      <div class="record-title">${t.title}</div>
+      <div class="record-sub">${t.provider} &nbsp;·&nbsp; <span style="text-transform:capitalize">${t.type}</span></div>
+      <div class="record-meta">${formatDate(t.start_date)} &nbsp;·&nbsp; ${t.duration_days} day(s)</div>
+    </div>`).join('')
+  ) : ''}
+
+  <!-- Emergency Contacts -->
+  ${emp.emergencyContacts?.length ? section('Emergency Contacts', `<table>
+    <tr style="background:#f9fafb"><td class="lbl"><b>Name</b></td><td class="lbl"><b>Relationship</b></td><td class="lbl"><b>Phone</b></td></tr>
+    ${emp.emergencyContacts.map(c => `<tr><td class="val">${c.full_name}</td><td class="val" style="text-transform:capitalize">${c.relationship}</td><td class="val">${c.phone}</td></tr>`).join('')}
+  </table>`) : ''}
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>${fullName} &nbsp;·&nbsp; ${emp.staff_no}</span>
+    <span>Sir Apollo Kaggwa Schools &nbsp;·&nbsp; Confidential Staff Record</span>
+    <span>Page 1</span>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) { alert('Allow pop-ups for this site to print.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    // Small delay so images load before print dialog opens
+    setTimeout(() => { win.print(); }, 600);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Printer size={16} className="text-brand-400" />
+            <h2 className="font-semibold text-slate-800 dark:text-slate-100">Print Staff Profile</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-slate-500">
+            A print-ready report will be generated for:
+          </p>
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-1">
+            <p className="font-semibold text-slate-800 dark:text-slate-100">
+              {emp.first_name} {emp.middle_name ? `${emp.middle_name} ` : ''}{emp.last_name}
+            </p>
+            <p className="text-xs font-mono text-brand-400">{emp.staff_no}</p>
+            {latestEmp && <p className="text-xs text-slate-500">{latestEmp.job_title} · {latestEmp.campus_name}</p>}
+          </div>
+          <p className="text-xs text-slate-400">
+            Includes: personal details, contact, employment history, academic records, transfers, performance appraisals, training, and emergency contacts.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <button className="btn-secondary text-sm" onClick={onClose}>Cancel</button>
+            <button className="btn-primary text-sm flex items-center gap-2" onClick={() => { doPrint(); onClose(); }}>
+              <Printer size={14} /> Print / Save as PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Quick single-file upload modal for passport photo / national ID */
 function QuickDocUpload({ employeeId, category, label, onClose }: {
