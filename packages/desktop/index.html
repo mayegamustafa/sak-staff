@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Apply theme BEFORE any CSS or React renders to avoid flash -->
+    <script>
+      (function () {
+        var stored = localStorage.getItem('sak_theme') || 'system';
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = stored === 'dark' || (stored === 'system' && prefersDark);
+        if (dark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#3b82f6" />
+
+    <!-- iOS Web App -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SAK Staff" />
+    <link rel="apple-touch-icon" href="/sak.jpg" />
+
+    <!-- SEO / Social -->
+    <meta name="description" content="Sir Apollo Kaggwa Schools – Staff Profiling & HR Management System" />
+    <meta property="og:title" content="SAK Staff Profiling System" />
+    <meta property="og:image" content="/sak.jpg" />
+
+    <title>SAK Staff Profiling System</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

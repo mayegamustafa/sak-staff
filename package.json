@@ -1,0 +1,24 @@
+{
+  "name": "sak-staff",
+  "version": "1.0.0",
+  "description": "Sir Apollo Kaggwa Schools – Staff Profiling System",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/desktop",
+    "packages/mobile"
+  ],
+  "scripts": {
+    "backend": "npm run dev --workspace=packages/backend",
+    "desktop": "npm run dev --workspace=packages/desktop",
+    "web": "npm run web --workspace=packages/desktop",
+    "shared:build": "npm run build --workspace=packages/shared",
+    "db:migrate": "npm run migrate --workspace=packages/backend",
+    "db:seed": "npm run seed --workspace=packages/backend"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

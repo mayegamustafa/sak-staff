@@ -1,0 +1,13 @@
+{
+  "name": "SAK Staff Profiling System",
+  "short_name": "SAK Staff",
+  "description": "Sir Apollo Kaggwa Schools – Staff Lifecycle Management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "landscape",
+  "icons": [
+    { "src": "/sak.jpg", "sizes": "399x399", "type": "image/jpeg", "purpose": "any maskable" }
+  ]
+}

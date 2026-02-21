@@ -1,0 +1,23 @@
+# Normalise all text files to LF in the repo; checkouts get the
+# platform native line ending (CRLF on Windows, LF on Linux/macOS).
+* text=auto eol=lf
+
+# Windows scripts should stay CRLF on Windows checkouts
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binaries — never touch line endings
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.otf  binary
+*.mp4  binary
+*.zip  binary
+*.db   binary
