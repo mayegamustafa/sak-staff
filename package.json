@@ -15,7 +15,8 @@
     "web": "npm run web --workspace=packages/desktop",
     "shared:build": "npm run build --workspace=packages/shared",
     "db:migrate": "npm run migrate --workspace=packages/backend",
-    "db:seed": "npm run seed --workspace=packages/backend"
+    "db:seed": "npm run seed --workspace=packages/backend",
+    "build:app": "npm run build --workspace=packages/desktop"
   },
   "engines": {
     "node": ">=18.0.0",

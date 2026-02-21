@@ -50,7 +50,7 @@ brew services start postgresql@14
 
 ### 1. Clone
 ```bash
-git clone https://github.com/your-org/sak-staff.git
+git clone https://github.com/mayegamustafa/sak-staff.git
 cd sak-staff
 ```
 
@@ -129,14 +129,36 @@ npm run icons:generate --workspace=packages/desktop
 
 Build for your current platform:
 ```bash
+npm run build:app          # shortcut from project root
+# or
 npm run build --workspace=packages/desktop
 ```
+
+> **Before building** make sure `VITE_SERVER_URL` in `packages/desktop/.env` points to your
+> production backend (e.g. `http://192.168.1.50:4000`).  
+> The packaged app bakes this URL in at build time.
 
 | Platform | Output in `packages/desktop/release/` |
 |---|---|
 | Linux | `*.AppImage`, `*.deb` |
 | Windows | `*Setup*.exe`, portable `.exe` |
 | macOS | `*.dmg` (x64 + arm64) |
+
+### Installing the built package
+
+**Linux AppImage** (no install needed — just run it):
+```bash
+chmod +x "SAK Staff System-1.0.0.AppImage"
+./"SAK Staff System-1.0.0.AppImage"
+```
+
+**Linux .deb** (installs to `/opt/`, adds launcher to application menu):
+```bash
+sudo dpkg -i "sak-staff-system_1.0.0_amd64.deb"
+```
+
+**Windows** — double-click the `*Setup*.exe` → follow the installer wizard.  
+The app appears in the Start menu as **SAK Staff System**.
 
 ### macOS `.icns` icon (run on a Mac)
 ```bash
@@ -176,6 +198,7 @@ sak-staff/
 |---|---|
 | `npm run backend` | Start backend dev server (port 4000) |
 | `npm run desktop` | Start web/desktop dev server (port 5173) |
+| `npm run build:app` | Build desktop installer for current platform |
 | `npm run db:migrate` | Run all pending database migrations |
 | `npm run db:seed` | Seed roles, permissions & superadmin |
 | `npm run shared:build` | Compile shared types package |
@@ -201,7 +224,12 @@ sak-staff/
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_SERVER_URL` | `http://localhost:4000` | Backend base URL |
+| `VITE_SERVER_URL` | `http://localhost:4000` | Backend base URL (baked in at build time) |
+
+> **Important for packaged builds**: set `VITE_SERVER_URL` to the server's LAN IP
+> (e.g. `http://192.168.1.50:4000`) before running `npm run build:app`.
+> Every workstation that installs the `.exe` / `.AppImage` / `.deb` will connect
+> to that server automatically.
 
 ---
 
