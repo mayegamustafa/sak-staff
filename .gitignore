@@ -25,6 +25,12 @@ release/
 uploads/
 packages/backend/uploads/
 
+# Desktop installer downloads (placed here after build; binary files, no-commit)
+packages/backend/downloads/*.AppImage
+packages/backend/downloads/*.deb
+packages/backend/downloads/*.exe
+packages/backend/downloads/*.dmg
+
 # Logs
 logs/
 *.log

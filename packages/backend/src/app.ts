@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import fs from 'fs';
 import { config } from './config';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -37,6 +38,32 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // ── Static files (uploaded documents) ───────────────────────────────────────
 app.use('/uploads', express.static(path.resolve(config.upload.dir)));
+
+// ── Desktop installer downloads (served without auth) ────────────────────────
+const DOWNLOADS_DIR = path.resolve(__dirname, '../../downloads');
+app.use('/downloads', express.static(DOWNLOADS_DIR));
+
+// List available installers (used by in-app banner to decide what to show)
+const INSTALLER_EXTS = ['.AppImage', '.deb', '.exe', '.dmg'];
+app.get('/api/downloads/info', (_req, res) => {
+  try {
+    if (!fs.existsSync(DOWNLOADS_DIR)) return res.json({ files: [] });
+    const files = fs.readdirSync(DOWNLOADS_DIR)
+      .filter(f => INSTALLER_EXTS.some(ext => f.endsWith(ext)))
+      .map(f => {
+        const stat = fs.statSync(path.join(DOWNLOADS_DIR, f));
+        return {
+          name: f,
+          url: `/downloads/${encodeURIComponent(f)}`,
+          sizeMB: Math.round(stat.size / 1024 / 1024 * 10) / 10,
+          ext: INSTALLER_EXTS.find(ext => f.endsWith(ext)),
+        };
+      });
+    res.json({ files });
+  } catch {
+    res.json({ files: [] });
+  }
+});
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
