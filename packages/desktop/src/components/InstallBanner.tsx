@@ -79,7 +79,7 @@ export default function InstallBanner() {
                   </button>
                 ) : (
                   <a
-                    href="https://github.com/sakschools/sak-staff/releases/latest"
+                    href="https://github.com/mayegamustafa/sak-staff/releases/latest"
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
