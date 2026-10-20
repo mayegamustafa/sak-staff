@@ -1,0 +1,59 @@
+node_modules
+**/node_modules
+
+# Build outputs – regenerated inside the image
+**/dist
+**/dist-electron
+**/release
+**/build
+*.tsbuildinfo
+
+# Secrets and host-specific config must come from the platform, never the image
+.env
+**/.env
+**/.env.local
+**/.env.*.local
+ecosystem.config.js
+
+# Runtime data
+uploads
+**/uploads
+logs
+**/logs
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# Desktop installers (large binaries, not needed by the server image)
+packages/backend/downloads/*.AppImage
+packages/backend/downloads/*.deb
+packages/backend/downloads/*.exe
+packages/backend/downloads/*.dmg
+
+# Not part of the server
+packages/mobile/app
+packages/mobile/src
+
+.git
+.github
+.qodo
+.sixth
+.vscode
+.idea
+*.pdf
+test_out.png
+README.md
+docs
+
+# Server secrets and runtime files – never baked into an image layer
+.env.docker
+.deploy.lock
+downloads
+*.dump
+*.tar.gz
+ecosystem.config.js
+ak_secure*
+tore123*
+tringify*
+ole.error*

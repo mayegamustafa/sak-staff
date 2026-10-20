@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, X, Monitor, HardDrive } from 'lucide-react';
+import { Download, X, HardDrive } from 'lucide-react';
 
 /**
  * Shown only in browser mode (not inside Electron).
@@ -9,7 +9,7 @@ import { Download, X, Monitor, HardDrive } from 'lucide-react';
  *  3. GitHub Releases fallback (if no local installer found)
  */
 
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) ?? 'http://localhost:4000';
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || '';
 const API_ROOT = import.meta.env.DEV ? '' : SERVER_URL;
 
 const isElectron = () =>
@@ -65,13 +65,26 @@ export default function InstallBanner() {
     setDismissed(true);
   };
 
-  // Pick the best installer for the user's OS
+  // Detect OS precisely
   const ua = navigator.userAgent.toLowerCase();
-  const preferred = (
-    ua.includes('win')   ? installers.find(f => f.ext === '.exe') :
-    ua.includes('linux') ? (installers.find(f => f.ext === '.deb') ?? installers.find(f => f.ext === '.AppImage')) :
-    ua.includes('mac')   ? installers.find(f => f.ext === '.dmg') : null
-  ) ?? installers[0] ?? null;
+  const isWindows = ua.includes('win');
+  const isMac     = ua.includes('mac') || ua.includes('darwin');
+  const isLinux   = ua.includes('linux') && !ua.includes('android');
+
+  // Pick the best installer for this specific OS — NO cross-OS fallback
+  const preferred = isWindows
+    ? (installers.find(f => f.ext === '.exe') ?? null)
+    : isMac
+      ? (installers.find(f => f.ext === '.dmg') ?? null)
+      : isLinux
+        ? (installers.find(f => f.ext === '.deb') ?? installers.find(f => f.ext === '.AppImage') ?? null)
+        : null;
+
+  const osLabel = isWindows ? 'Windows' : isMac ? 'macOS' : isLinux ? 'Linux' : null;
+  const extLabel = preferred?.ext === '.exe' ? 'EXE' : preferred?.ext === '.dmg' ? 'DMG' : preferred?.ext === '.deb' ? 'DEB' : 'AppImage';
+
+  // Nothing to offer — hide the banner entirely
+  if (!deferredPrompt && !preferred) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm w-full">
@@ -86,7 +99,7 @@ export default function InstallBanner() {
                 Get the Desktop App
               </p>
               <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                Install SAK Staff on your computer for full offline support, faster access and automatic sync.
+                Install SAK Staffing on your computer for full offline support, faster access and automatic sync.
               </p>
 
               <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -102,28 +115,15 @@ export default function InstallBanner() {
                 )}
 
                 {/* 2. Direct download from backend server */}
-                {preferred ? (
+                {preferred && (
                   <a
                     href={`${API_ROOT}${preferred.url}`}
                     download={preferred.name}
                     className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                   >
                     <HardDrive size={12} />
-                    Download Desktop ({preferred.sizeMB} MB)
+                    Download for {osLabel} ({extLabel}, {preferred.sizeMB} MB)
                   </a>
-                ) : (
-                  /* 3. Fallback: GitHub Releases */
-                  !deferredPrompt && (
-                    <a
-                      href="https://github.com/mayegamustafa/sak-staff/releases/latest"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 bg-slate-600 hover:bg-slate-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <Monitor size={12} />
-                      Download Desktop App
-                    </a>
-                  )
                 )}
 
                 <button

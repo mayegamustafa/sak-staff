@@ -32,7 +32,7 @@ export default function LoginScreen() {
           <Text style={styles.logoText}>SAK</Text>
         </View>
         <Text style={styles.title}>Sir Apollo Kaggwa Schools</Text>
-        <Text style={styles.subtitle}>Staff Profiling System</Text>
+        <Text style={styles.subtitle}>Staffing</Text>
 
         <View style={styles.card}>
           <Text style={styles.label}>USERNAME</Text>

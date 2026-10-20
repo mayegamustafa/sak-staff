@@ -1,7 +1,7 @@
 {
   "name": "@sak/mobile",
   "version": "1.0.0",
-  "description": "SAK Staff Profiling – Mobile App (React Native + Expo)",
+  "description": "SAK Staffing – Mobile App (React Native + Expo)",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

@@ -47,7 +47,7 @@ export default function DashboardTab() {
 
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
-          SAK Staff Profiling System{'\n'}Sir Apollo Kaggwa Schools – Since 1996
+          SAK Staffing{'\n'}Sir Apollo Kaggwa Schools – Since 1996
         </Text>
       </View>
     </ScrollView>

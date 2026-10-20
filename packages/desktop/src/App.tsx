@@ -11,11 +11,16 @@ import EmployeeDetailPage from './pages/EmployeeDetailPage';
 import TransfersPage from './pages/TransfersPage';
 import PerformancePage from './pages/PerformancePage';
 import TrainingPage from './pages/TrainingPage';
+import AttendancePage from './pages/AttendancePage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
 import CampusesPage from './pages/CampusesPage';
 import StaffGapsPage from './pages/StaffGapsPage';
 import EmployeeFormPage from './pages/EmployeeFormPage';
+import OnboardingLinksPage from './pages/OnboardingLinksPage';
+import BulkImportPage from './pages/BulkImportPage';
+import PendingApprovalsPage from './pages/PendingApprovalsPage';
 import Layout from './components/Layout';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -25,7 +30,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { setUser } = useAuthStore();
+  const { setUser, setMustChangePassword } = useAuthStore();
   const { setSyncStatus } = useSyncStore();
   const [initialised, setInitialised] = useState(false);
 
@@ -38,9 +43,14 @@ export default function App() {
           email: '', role: { slug: session.roleSlug, name: '' },
         };
         setUser(user, session.permissions);
+        setMustChangePassword(!!session.mustChangePassword);
       }
       setInitialised(true);
     });
+
+    // The server refused a request until the password is changed – show the dialog.
+    const onPwRequired = () => setMustChangePassword(true);
+    window.addEventListener('sak:password-change-required', onPwRequired);
 
     // Listen for sync status updates from Electron main
     window.sakAPI.sync.onStatusChange((status) => {
@@ -51,8 +61,11 @@ export default function App() {
     const interval = setInterval(() => {
       window.sakAPI.sync.trigger();
     }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [setUser, setSyncStatus]);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('sak:password-change-required', onPwRequired);
+    };
+  }, [setUser, setSyncStatus, setMustChangePassword]);
 
   if (!initialised) {
     return (
@@ -76,9 +89,14 @@ export default function App() {
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="performance" element={<PerformancePage />} />
           <Route path="training" element={<TrainingPage />} />
+          <Route path="attendance" element={<AttendancePage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="campuses" element={<CampusesPage />} />
           <Route path="staff-gaps" element={<StaffGapsPage />} />
+          <Route path="onboarding-links" element={<OnboardingLinksPage />} />
+          <Route path="bulk-import" element={<BulkImportPage />} />
+          <Route path="pending-approvals" element={<PendingApprovalsPage />} />
           <Route path="users" element={<UsersPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

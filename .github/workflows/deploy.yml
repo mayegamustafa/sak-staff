@@ -1,0 +1,65 @@
+# On every push to main: check the code compiles, then tell the production
+# server to update itself (deploy/deploy.sh – backup, build, swap, health check,
+# automatic rollback). Setup: docs/KVM-SETUP.md, step 7.
+#
+# Deploying is off until the repository variable DEPLOY_ENABLED is set to "true",
+# so pushes before the server exists only run the checks.
+name: Check & deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; never cancel one halfway.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # --ignore-scripts: skip the Electron download / native rebuild.
+      - run: npm ci --ignore-scripts
+      - run: npm run build --workspace=packages/shared
+      - name: Type-check API
+        run: npx tsc --noEmit -p packages/backend
+      - name: Type-check web app
+        run: npx tsc --noEmit -p packages/desktop/tsconfig.json
+      - name: Type-check desktop shell
+        run: npx tsc --noEmit -p packages/desktop/tsconfig.electron.json
+
+  deploy:
+    needs: check
+    if: vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Update the server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: refuses to talk to anything pretending to be the server.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The server only lets this key run deploy/deploy.sh (forced command),
+          # so the command sent here is ignored.
+          ssh -i ~/.ssh/deploy_key \
+              -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+              "deploy@$DEPLOY_HOST" deploy

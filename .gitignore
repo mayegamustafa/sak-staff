@@ -56,3 +56,25 @@ sak.jpg
 
 # Test coverage
 coverage/
+
+# Secrets / host-specific process config – never commit
+ecosystem.config.js
+.env.docker
+*.dump
+*.sql.gz
+.env.production.local
+
+# Accidental shell output (psql/less results redirected to files with odd names)
+ak_secure*
+tore123*
+tringify*
+ole.error*
+
+# Server-side runtime files (deploy/ scripts)
+.deploy.lock
+/downloads/
+
+# Not part of this system / not for a public repository
+sak-feedback-form/
+*.pdf
+packages/backend/downloads/builder-debug.yml

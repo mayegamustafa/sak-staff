@@ -19,6 +19,8 @@ interface JobTitle {
   id: string; title: string; pay_grade: string | null;
   category: 'teaching_staff' | 'non_teaching_professional' | 'support_staff' | 'administrator' | 'manager';
   is_active: boolean;
+  department_id: string | null;
+  department_name: string | null;
 }
 interface Stream {
   id: string; name: string; display_order: number; is_active: boolean;
@@ -34,7 +36,7 @@ type ActiveTab = 'campuses' | 'departments' | 'jobtitles' | 'classes';
 
 const EMPTY_CAMPUS = { name: '', code: '', address: '', phone: '', email: '' };
 const EMPTY_DEPT   = { name: '', code: '' };
-const EMPTY_JT     = { title: '', payGrade: '', category: 'teaching_staff' as JobTitle['category'] };
+const EMPTY_JT = { title: '', payGrade: '', category: 'teaching_staff' as JobTitle['category'], departmentId: '' as string | null };
 const EMPTY_CLASS  = { campusId: '', name: '', level: 'primary' as SchoolClass['level'], displayOrder: 0 };
 
 const CLASS_LEVELS: { value: SchoolClass['level']; label: string; prefix: string }[] = [
@@ -333,16 +335,27 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
   const [modal, setModal] = useState<null | { mode: 'add' | 'edit'; data: typeof EMPTY_JT & { id?: string } }>(null);
   const [err, setErr] = useState('');
   const [filterCat, setFilterCat] = useState<string>('all');
+  const [groupByDept, setGroupByDept] = useState(false);
 
   const { data: jobTitles = [], isLoading } = useQuery<JobTitle[]>({
     queryKey: ['job-titles'],
     queryFn: () => window.sakAPI.jobTitles.list() as Promise<JobTitle[]>,
   });
 
+  const { data: allDepts = [] } = useQuery<Department[]>({
+    queryKey: ['departments'],
+    queryFn: () => window.sakAPI.campuses.listDepartments() as Promise<Department[]>,
+  });
+
   const save = useMutation({
     mutationFn: async (m: typeof modal) => {
       if (!m) return;
-      const payload = { title: m.data.title, payGrade: m.data.payGrade || undefined, category: m.data.category };
+      const payload = {
+        title: m.data.title,
+        payGrade: m.data.payGrade || undefined,
+        category: m.data.category,
+        departmentId: m.data.departmentId || null,
+      };
       return m.mode === 'edit' && m.data.id
         ? window.sakAPI.jobTitles.update(m.data.id, payload)
         : window.sakAPI.jobTitles.create(payload);
@@ -361,6 +374,14 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
   const usedCats = JT_CATEGORIES.filter((c) => jobTitles.some((j) => j.category === c.value));
   const displayCats = filterCat === 'all' ? usedCats : JT_CATEGORIES.filter((c) => c.value === filterCat);
 
+  // Department grouping
+  const usedDeptIds = [...new Set(filtered.map(j => j.department_id ?? '__none__'))];
+  const deptGroups = usedDeptIds.map(did => ({
+    id: did,
+    name: did === '__none__' ? 'No Department Assigned' : (filtered.find(j => j.department_id === did)?.department_name ?? did),
+    rows: filtered.filter(j => (j.department_id ?? '__none__') === did),
+  })).sort((a, b) => a.name === 'No Department Assigned' ? 1 : a.name.localeCompare(b.name));
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -375,6 +396,14 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
               {v === 'all' ? 'All' : catLabel(v)}
             </button>
           ))}
+          <button onClick={() => setGroupByDept(g => !g)}
+            className={"px-3 py-1 rounded-full text-xs font-medium transition-colors " + (
+              groupByDept
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700'
+            )}>
+            Group by Department
+          </button>
         </div>
         {canWrite && (
           <button className="btn-primary shrink-0" onClick={() => { setErr(''); setModal({ mode: 'add', data: { ...EMPTY_JT } }); }}>
@@ -391,6 +420,46 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
         </div>
       )}
 
+      {/* ── Grouped by DEPARTMENT ── */}
+      {groupByDept && (
+        <div className="space-y-4">
+          {deptGroups.map(({ id, name, rows }) => (
+            <div key={id} className="card p-0 overflow-hidden">
+              <div className="px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-100 dark:border-indigo-800 flex items-center gap-2">
+                <FolderOpen size={13} className="text-indigo-400 shrink-0" />
+                <span className="font-semibold text-sm text-indigo-700 dark:text-indigo-300">{name}</span>
+                <span className="text-xs text-indigo-400 ml-1">{rows.length}</span>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {rows.map((j) => (
+                  <div key={j.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+                      <span className="text-sm text-slate-800 dark:text-slate-100">{j.title}</span>
+                      {j.pay_grade && (
+                        <span className="text-xs font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">{j.pay_grade}</span>
+                      )}
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300">{catLabel(j.category)}</span>
+                      {!j.is_active && <span className="badge-inactive text-xs">Inactive</span>}
+                    </div>
+                    {canWrite && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => { setErr(''); setModal({ mode: 'edit', data: { id: j.id, title: j.title, payGrade: j.pay_grade ?? '', category: j.category, departmentId: j.department_id } }); }}
+                          className="p-1 text-slate-400 hover:text-brand-400 transition-colors" title="Edit"><Pencil size={13} /></button>
+                        <button onClick={() => toggle.mutate(j.id)}
+                          className={"p-1 transition-colors " + (j.is_active ? 'text-emerald-500 hover:text-slate-400' : 'text-slate-400 hover:text-emerald-500')}
+                          title={j.is_active ? 'Deactivate' : 'Activate'}>{j.is_active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Grouped by CATEGORY (default) ── */}
+      {!groupByDept && (
       <div className="space-y-4">
         {displayCats.map(({ value, label }) => {
           const rows = filtered.filter((j) => j.category === value);
@@ -410,12 +479,15 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
                       {j.pay_grade && (
                         <span className="text-xs font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">{j.pay_grade}</span>
                       )}
+                      {j.department_name && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">{j.department_name}</span>
+                      )}
                       {!j.is_active && <span className="badge-inactive text-xs">Inactive</span>}
                     </div>
                     {canWrite && (
                       <div className="flex items-center gap-1 shrink-0">
                         <button
-                          onClick={() => { setErr(''); setModal({ mode: 'edit', data: { id: j.id, title: j.title, payGrade: j.pay_grade ?? '', category: j.category } }); }}
+                          onClick={() => { setErr(''); setModal({ mode: 'edit', data: { id: j.id, title: j.title, payGrade: j.pay_grade ?? '', category: j.category, departmentId: j.department_id } }); }}
                           className="p-1 text-slate-400 hover:text-brand-400 transition-colors" title="Edit"
                         ><Pencil size={13} /></button>
                         <button
@@ -432,6 +504,7 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
           );
         })}
       </div>
+      )}
 
       {modal && (
         <Modal title={modal.mode === 'add' ? 'Add Job Title' : 'Edit Job Title'} onClose={() => setModal(null)}>
@@ -454,6 +527,16 @@ function JobTitlesTab({ canWrite, qc }: { canWrite: boolean; qc: ReturnType<type
                 <input className="input" placeholder="e.g. U4, P2, T3" value={modal.data.payGrade}
                   onChange={(e) => setModal((m) => m && ({ ...m, data: { ...m.data, payGrade: e.target.value } }))} />
               </div>
+            </div>
+            <div>
+              <label className="label">Department</label>
+              <select className="input" value={modal.data.departmentId ?? ''}
+                onChange={(e) => setModal((m) => m && ({ ...m, data: { ...m.data, departmentId: e.target.value || null } }))}>
+                <option value="">— No Department —</option>
+                {allDepts.filter(d => d.is_active).map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
             </div>
             {err && <p className="text-red-400 text-sm">{err}</p>}
             <div className="flex justify-end gap-2">

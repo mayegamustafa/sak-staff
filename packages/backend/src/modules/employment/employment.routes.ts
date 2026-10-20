@@ -16,8 +16,8 @@ const EmploymentSchema = z.object({
   payGrade: z.string().max(50).optional(),
   contractType: z.enum(['permanent', 'contract', 'probation', 'casual', 'internship']),
   status: z.enum(['active', 'on_leave', 'suspended', 'retired', 'resigned', 'terminated']).default('active'),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional().transform(v => v || new Date().toISOString().slice(0, 10)),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullish(),
   reportingToEmployeeId: z.string().uuid().optional(),
 });
 
@@ -72,6 +72,52 @@ router.post('/', requirePermission('employment', 'create'),
         reporting_to_employee_id: data.reportingToEmployeeId,
       }).returning('*');
       res.status(201).json(employment);
+    } catch (err) { next(err); }
+  }
+);
+// PUT /api/employment/:id
+router.put('/:id', requirePermission('employment', 'update'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const UpdateSchema = EmploymentSchema.partial().omit({ employeeId: true });
+      const data = UpdateSchema.parse(req.body);
+      const existing = await db('employments').where('id', req.params.id).first();
+      if (!existing) throw new AppError(404, 'Employment record not found');
+      const [updated] = await db('employments').where('id', req.params.id).update({
+        campus_id:     data.campusId     ?? existing.campus_id,
+        department_id: data.departmentId ?? existing.department_id,
+        job_title:     data.jobTitle     ?? existing.job_title,
+        pay_grade:     data.payGrade     !== undefined ? data.payGrade : existing.pay_grade,
+        contract_type: data.contractType ?? existing.contract_type,
+        status:        data.status       ?? existing.status,
+        start_date:    data.startDate    ?? existing.start_date,
+        end_date:      data.endDate      !== undefined ? data.endDate : existing.end_date,
+        updated_at:    db.fn.now(),
+      }).returning('*');
+      res.json(updated);
+    } catch (err) { next(err); }
+  }
+);
+// PUT /api/employment/:id
+router.put('/:id', requirePermission('employment', 'update'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const UpdateSchema = EmploymentSchema.partial().omit({ employeeId: true });
+      const data = UpdateSchema.parse(req.body);
+      const existing = await db('employments').where('id', req.params.id).first();
+      if (!existing) throw new AppError(404, 'Employment record not found');
+      const [updated] = await db('employments').where('id', req.params.id).update({
+        campus_id:     data.campusId     ?? existing.campus_id,
+        department_id: data.departmentId ?? existing.department_id,
+        job_title:     data.jobTitle     ?? existing.job_title,
+        pay_grade:     data.payGrade     !== undefined ? data.payGrade : existing.pay_grade,
+        contract_type: data.contractType ?? existing.contract_type,
+        status:        data.status       ?? existing.status,
+        start_date:    data.startDate    ?? existing.start_date,
+        end_date:      data.endDate      !== undefined ? data.endDate : existing.end_date,
+        updated_at: db.fn.now(),
+      }).returning('*');
+      res.json(updated);
     } catch (err) { next(err); }
   }
 );

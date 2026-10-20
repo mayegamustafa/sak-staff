@@ -5,7 +5,7 @@
  */
 import axios from 'axios';
 
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) ?? 'http://localhost:4000';
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || '';
 
 const TOKEN_KEY = 'sak_token';
 const USER_KEY  = 'sak_user';
@@ -23,6 +23,27 @@ http.interceptors.request.use((cfg) => {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token && cfg.headers) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
+});
+
+function clearStoredSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(PERMS_KEY);
+}
+
+// Server-side session checks: a revoked/expired session (password changed,
+// account deactivated) sends the user back to the login screen, and a pending
+// forced password change re-opens the change-password dialog.
+http.interceptors.response.use(undefined, (err) => {
+  const status = err.response?.status;
+  const url: string = err.config?.url ?? '';
+  if (status === 401 && !url.includes('/api/auth/login') && localStorage.getItem(TOKEN_KEY)) {
+    clearStoredSession();
+    if (!window.location.pathname.startsWith('/login')) window.location.assign('/login');
+  } else if (status === 403 && err.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED') {
+    window.dispatchEvent(new Event('sak:password-change-required'));
+  }
+  return Promise.reject(err);
 });
 
 export const browserSakAPI = {
@@ -43,6 +64,7 @@ export const browserSakAPI = {
             role: data.user.role,
           },
           permissions: perms,
+          mustChangePassword: !!data.mustChangePassword,
         };
       } catch (err: any) {
         const msg = err.response?.data?.message ?? 'Login failed';
@@ -51,9 +73,19 @@ export const browserSakAPI = {
     },
 
     logout: async () => {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-      localStorage.removeItem(PERMS_KEY);
+      clearStoredSession();
+    },
+
+    changePassword: async (currentPassword: string, newPassword: string) => {
+      try {
+        const { data } = await http.post('/api/auth/change-password', { currentPassword, newPassword });
+        localStorage.setItem(TOKEN_KEY, data.accessToken);
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        localStorage.setItem(PERMS_KEY, JSON.stringify(data.user?.permissions ?? []));
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, message: err.response?.data?.message ?? 'Could not change password' };
+      }
     },
 
     getSession: async () => {
@@ -67,6 +99,7 @@ export const browserSakAPI = {
         username: user.username,
         roleSlug: user.role?.slug ?? '',
         permissions: permsStr ? JSON.parse(permsStr) : [],
+        mustChangePassword: !!user.mustChangePassword,
         _user: user,          // extra field used in App.tsx to preserve full user
       };
     },
@@ -97,8 +130,80 @@ export const browserSakAPI = {
       const { data } = await http.post(`/api/employees/${employeeId}/education`, payload);
       return data;
     },
+    updateEducation: async (employeeId: string, eduId: string, payload: unknown) => {
+      const { data } = await http.put(`/api/employees/${employeeId}/education/${eduId}`, payload);
+      return data;
+    },
     deleteEducation: async (employeeId: string, eduId: string) => {
       await http.delete(`/api/employees/${employeeId}/education/${eduId}`);
+    },
+    addWorkHistory: async (employeeId: string, payload: unknown) => {
+      const { data } = await http.post(`/api/employees/${employeeId}/work-history`, payload);
+      return data;
+    },
+    updateWorkHistory: async (employeeId: string, whId: string, payload: unknown) => {
+      const { data } = await http.put(`/api/employees/${employeeId}/work-history/${whId}`, payload);
+      return data;
+    },
+    deleteWorkHistory: async (employeeId: string, whId: string) => {
+      await http.delete(`/api/employees/${employeeId}/work-history/${whId}`);
+    },
+    addReferee: async (employeeId: string, payload: unknown) => {
+      const { data } = await http.post(`/api/employees/${employeeId}/referees`, payload);
+      return data;
+    },
+    updateReferee: async (employeeId: string, refId: string, payload: unknown) => {
+      const { data } = await http.put(`/api/employees/${employeeId}/referees/${refId}`, payload);
+      return data;
+    },
+    deleteReferee: async (employeeId: string, refId: string) => {
+      await http.delete(`/api/employees/${employeeId}/referees/${refId}`);
+    },
+    addEmergency: async (employeeId: string, payload: unknown) => {
+      const { data } = await http.post(`/api/employees/${employeeId}/emergency-contacts`, payload);
+      return data;
+    },
+    updateEmergency: async (employeeId: string, contactId: string, payload: unknown) => {
+      const { data } = await http.put(`/api/employees/${employeeId}/emergency-contacts/${contactId}`, payload);
+      return data;
+    },
+
+    // Exit management
+    deactivate: async (id: string, payload: { exitReason: string; exitDate: string; exitNotes?: string }) => {
+      const { data } = await http.post(`/api/employees/${id}/deactivate`, payload);
+      return data;
+    },
+    reactivate: async (id: string) => {
+      const { data } = await http.post(`/api/employees/${id}/reactivate`, {});
+      return data;
+    },
+
+    // Onboarding tokens
+    generateOnboardingToken: async (id: string) => {
+      const { data } = await http.post(`/api/employees/${id}/onboarding-token`, {});
+      return data;
+    },
+    listOnboardingTokens: async (id: string) => {
+      const { data } = await http.get(`/api/employees/${id}/onboarding-tokens`);
+      return data;
+    },
+    revokeOnboardingToken: async (tokenId: string) => {
+      await http.delete(`/api/employees/onboarding-tokens/${tokenId}`);
+    },
+
+    // Bank details
+    getBankDetails: async (employeeId: string) => {
+      const { data } = await http.get(`/api/employees/${employeeId}/bank-details`);
+      return data;
+    },
+    // Assigned classes (teachers)
+    getClasses: async (employeeId: string) => {
+      const { data } = await http.get(`/api/employees/${employeeId}/classes`);
+      return data;
+    },
+    updateClasses: async (employeeId: string, classIds: string[]) => {
+      const { data } = await http.put(`/api/employees/${employeeId}/classes`, { classIds });
+      return data;
     },
   },
 
@@ -109,6 +214,10 @@ export const browserSakAPI = {
     },
     create: async (payload: unknown) => {
       const { data } = await http.post('/api/employment', payload);
+      return data;
+    },
+    update: async (employmentId: string, payload: unknown) => {
+      const { data } = await http.put(`/api/employment/${employmentId}`, payload);
       return data;
     },
     addSalary: async (employmentId: string, payload: unknown) => {
@@ -126,10 +235,22 @@ export const browserSakAPI = {
       const { data } = await http.post('/api/transfers', payload);
       return data;
     },
-    approve: async (id: string, action: 'approved' | 'rejected') => {
-      const endpoint = action === 'approved' ? 'approve' : 'reject';
-      const { data } = await http.patch(`/api/transfers/${id}/${endpoint}`);
+    update: async (id: string, payload: unknown) => {
+      const { data } = await http.put(`/api/transfers/${id}`, payload);
       return data;
+    },
+    approve: async (id: string, action: 'approved' | 'rejected', meta?: {
+      approvalComment?: string; approvalSignature?: string; approvalRole?: string; approvalDate?: string;
+    }) => {
+      const { data } = await http.patch(`/api/transfers/${id}/approve`, { action, ...meta });
+      return data;
+    },
+    cancel: async (id: string) => {
+      const { data } = await http.patch(`/api/transfers/${id}/cancel`);
+      return data;
+    },
+    delete: async (id: string) => {
+      await http.delete(`/api/transfers/${id}`);
     },
   },
 
@@ -144,6 +265,60 @@ export const browserSakAPI = {
     },
     create: async (payload: unknown) => {
       const { data } = await http.post('/api/performance', payload);
+      return data;
+    },
+    delete: async (id: string) => {
+      const { data } = await http.delete(`/api/performance/${id}`);
+      return data;
+    },
+  },
+
+  appraisalTemplates: {
+    list: async () => {
+      const { data } = await http.get('/api/appraisal-templates');
+      return data;
+    },
+    get: async (id: string) => {
+      const { data } = await http.get(`/api/appraisal-templates/${id}`);
+      return data;
+    },
+    create: async (payload: unknown) => {
+      const { data } = await http.post('/api/appraisal-templates', payload);
+      return data;
+    },
+    update: async (id: string, payload: unknown) => {
+      const { data } = await http.put(`/api/appraisal-templates/${id}`, payload);
+      return data;
+    },
+    delete: async (id: string) => {
+      const { data } = await http.delete(`/api/appraisal-templates/${id}`);
+      return data;
+    },
+  },
+
+  staffAppraisals: {
+    list: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/staff-appraisals', { params });
+      return data;
+    },
+    get: async (id: string) => {
+      const { data } = await http.get(`/api/staff-appraisals/${id}`);
+      return data;
+    },
+    getByEmployee: async (employeeId: string) => {
+      const { data } = await http.get(`/api/staff-appraisals/employee/${employeeId}`);
+      return data;
+    },
+    create: async (payload: unknown) => {
+      const { data } = await http.post('/api/staff-appraisals', payload);
+      return data;
+    },
+    update: async (id: string, payload: unknown) => {
+      const { data } = await http.put(`/api/staff-appraisals/${id}`, payload);
+      return data;
+    },
+    delete: async (id: string) => {
+      const { data } = await http.delete(`/api/staff-appraisals/${id}`);
       return data;
     },
   },
@@ -195,6 +370,40 @@ export const browserSakAPI = {
       const { data } = await http.delete(`/api/documents/${id}`);
       return data;
     },
+    listScanners: async () => {
+      const { data } = await http.get('/api/documents/scanners');
+      return data as { scanners: { device: string; name: string }[]; error?: string };
+    },
+    scan: async (payload: { employeeId: string; category: string; title: string; device?: string; resolution?: string; format?: string }) => {
+      const { data } = await http.post('/api/documents/scan', payload);
+      return data;
+    },
+    uploadBase64: async (payload: { employeeId: string; category: string; title: string; dataUrl: string; issuedDate?: string; expiryDate?: string }) => {
+      const { data } = await http.post('/api/documents/upload-base64', payload);
+      return data;
+    },
+  },
+
+  onboarding: {
+    generateLink: async (campusId: string, label?: string) => {
+      const { data } = await http.post('/api/onboarding/admin/generate-link', {
+        campus_id: campusId,
+        label: label || null,
+      });
+      return data as { id: string; token: string; campus_id: string; campus_name: string; expires_at: string; recipient_name: string | null; submission_count: number };
+    },
+    listTokens: async () => {
+      const { data } = await http.get('/api/onboarding/admin/tokens');
+      return data as { id: string; token: string; campus_id: string | null; campus_name: string | null; recipient_name: string | null; submission_count: number; is_revoked: boolean; expires_at: string; created_at: string }[];
+    },
+    revokeToken: async (id: string) => {
+      await http.delete(`/api/onboarding/admin/tokens/${id}`);
+    },
+  },
+
+  serverInfo: async () => {
+    const { data } = await http.get('/api/server-info');
+    return data as { ip: string; port: number; baseUrl: string };
   },
 
   reports: {
@@ -229,6 +438,10 @@ export const browserSakAPI = {
     },
     toggleActive: async (id: string) => {
       const { data } = await http.patch(`/api/users/${id}/toggle-active`);
+      return data;
+    },
+    resetPassword: async (id: string, newPassword: string) => {
+      const { data } = await http.patch(`/api/users/${id}/reset-password`, { newPassword });
       return data;
     },
     roles: async () => {
@@ -352,6 +565,71 @@ export const browserSakAPI = {
     },
     deleteEstablishment: async (id: string) => {
       await http.delete(`/api/staffing/establishment/${id}`);
+    },
+  },
+
+  attendance: {
+    // Attendance records
+    listRecords: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/attendance', { params });
+      return data;
+    },
+    getRecord: async (id: string) => {
+      const { data } = await http.get(`/api/attendance/${id}`);
+      return data;
+    },
+    createRecord: async (payload: unknown) => {
+      const { data } = await http.post('/api/attendance', payload);
+      return data;
+    },
+    updateRecord: async (id: string, payload: unknown) => {
+      const { data } = await http.put(`/api/attendance/${id}`, payload);
+      return data;
+    },
+    deleteRecord: async (id: string) => {
+      await http.delete(`/api/attendance/${id}`);
+    },
+  },
+
+  analytics: {
+    overview: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/overview', { params });
+      return data;
+    },
+    stations: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/stations', { params });
+      return data;
+    },
+    staff: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/staff', { params });
+      return data;
+    },
+    attendance: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/attendance', { params });
+      return data;
+    },
+    trends: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/trends', { params });
+      return data;
+    },
+    absentByStation: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/absent-by-station', { params });
+      return data;
+    },
+    attendanceAlerts: async (params?: Record<string, unknown>) => {
+      const { data } = await http.get('/api/analytics/attendance-alerts', { params });
+      return data;
+    },
+  },
+
+  academicWeeks: {
+    list: async (params?: { year?: number; term?: string }) => {
+      const { data } = await http.get('/api/academic-weeks', { params });
+      return data;
+    },
+    generate: async (payload: { year: number; term: string }) => {
+      const { data } = await http.post('/api/academic-weeks/generate', payload);
+      return data;
     },
   },
 };

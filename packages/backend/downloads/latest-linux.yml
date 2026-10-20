@@ -1,0 +1,12 @@
+version: 1.0.0
+files:
+  - url: SAK-Staff-System-1.0.0-x86_64.AppImage
+    sha512: pGw2gNVHPJC/kJN/HETJX5vhUYyVoywtUS2ZGJ90Cw3Dk5qbLFd0KJ1uvCcZosgi12igukmUdT3LeCKnjVsYNw==
+    size: 119160418
+    blockMapSize: 126582
+  - url: SAK-Staff-System-1.0.0-amd64.deb
+    sha512: 0jc6WA/hUm9riR1Zv0jSirkHcVHjTyORuZMf22ZMHvnv0ebtXdVqzMxSE84x/ZhcCTPqL5WXz2YZsv68jIOdqw==
+    size: 79807422
+path: SAK-Staff-System-1.0.0-x86_64.AppImage
+sha512: pGw2gNVHPJC/kJN/HETJX5vhUYyVoywtUS2ZGJ90Cw3Dk5qbLFd0KJ1uvCcZosgi12igukmUdT3LeCKnjVsYNw==
+releaseDate: '2026-03-11T08:04:13.907Z'

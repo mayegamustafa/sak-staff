@@ -1,7 +1,7 @@
 {
   "name": "@sak/desktop",
   "version": "1.0.0",
-  "description": "SAK Staff Profiling – Desktop App (Electron + React)",
+  "description": "SAK Staffing – Desktop App (Electron + React)",
   "main": "dist-electron/main.js",
   "scripts": {
     "postinstall": "electron-rebuild -f -w better-sqlite3",
@@ -23,11 +23,13 @@
     "better-sqlite3": "^9.4.3",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.323.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.50.1",
     "react-router-dom": "^6.22.0",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^2.2.1",
     "zod": "^3.22.4",
     "zustand": "^4.5.0"
@@ -42,7 +44,7 @@
     "autoprefixer": "^10.4.17",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^29.0.1",
+    "electron": "29.4.6",
     "electron-builder": "^24.9.4",
     "jimp": "^1.6.0",
     "png-to-ico": "^3.0.1",
@@ -54,7 +56,7 @@
   },
   "build": {
     "appId": "ug.ac.sakaggwa.staff",
-    "productName": "SAK Staff System",
+    "productName": "SAK Staffing",
     "copyright": "Copyright © 2026 Sir Apollo Kaggwa Schools",
     "directories": {
       "output": "release"
@@ -70,7 +72,8 @@
         "deb"
       ],
       "category": "Office",
-      "icon": "assets/icons/"
+      "icon": "assets/icons/",
+      "artifactName": "SAK-Staffing-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
@@ -99,6 +102,17 @@
       ],
       "icon": "assets/icons/icon.icns",
       "category": "public.app-category.education"
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "http://localhost/downloads/"
+      }
+    ]
+  },
+  "homepage": "https://sak-schools.duckdns.org",
+  "author": {
+    "name": "Sir Apollo Kaggwa Schools",
+    "email": "admin@sakaggwa.ac.ug"
   }
 }

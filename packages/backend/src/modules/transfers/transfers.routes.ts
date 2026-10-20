@@ -31,12 +31,19 @@ router.get('/', requirePermission('transfers', 'read'),
         .join('employees as emp', 'transfers.employee_id', 'emp.id')
         .join('campuses as fc', 'transfers.from_campus_id', 'fc.id')
         .join('campuses as tc', 'transfers.to_campus_id', 'tc.id')
+        .leftJoin('users as approver', 'transfers.approved_by', 'approver.id')
+        .leftJoin('departments as fd', 'transfers.from_department_id', 'fd.id')
+        .leftJoin('departments as td', 'transfers.to_department_id', 'td.id')
         .select(
           'transfers.*',
           db.raw("concat(emp.first_name, ' ', emp.last_name) as employee_name"),
           'emp.staff_no',
+          'emp.photo_path',
           'fc.name as from_campus_name',
-          'tc.name as to_campus_name'
+          'tc.name as to_campus_name',
+          'fd.name as from_department_name',
+          'td.name as to_department_name',
+          'approver.username as approver_name',
         )
         .orderBy('transfers.effective_date', 'desc');
 
@@ -76,22 +83,90 @@ router.post('/', requirePermission('transfers', 'create'),
   }
 );
 
+// PUT /api/transfers/:id  (edit a pending transfer)
+router.put('/:id', requirePermission('transfers', 'update'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const existing = await db('transfers').where('id', req.params.id).first();
+      if (!existing) throw new AppError(404, 'Transfer not found');
+      const data = TransferSchema.parse(req.body);
+      const [transfer] = await db('transfers')
+        .where('id', req.params.id)
+        .update({
+          employee_id:        data.employeeId,
+          type:               data.type,
+          from_campus_id:     data.fromCampusId,
+          to_campus_id:       data.toCampusId,
+          from_department_id: data.fromDepartmentId ?? null,
+          to_department_id:   data.toDepartmentId   ?? null,
+          from_job_title:     data.fromJobTitle      ?? null,
+          to_job_title:       data.toJobTitle        ?? null,
+          effective_date:     data.effectiveDate,
+          end_date:           data.endDate           ?? null,
+          reason:             data.reason,
+          notes:              data.notes             ?? null,
+          updated_at:         new Date(),
+        })
+        .returning('*');
+      res.json(transfer);
+    } catch (err) { next(err); }
+  }
+);
+
+// PATCH /api/transfers/:id/cancel  (withdraw a pending transfer)
+router.patch('/:id/cancel', requirePermission('transfers', 'update'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const existing = await db('transfers').where('id', req.params.id).first();
+      if (!existing) throw new AppError(404, 'Transfer not found');
+      if (existing.status !== 'pending') throw new AppError(400, 'Only pending transfers can be cancelled');
+      const [transfer] = await db('transfers')
+        .where('id', req.params.id)
+        .update({ status: 'cancelled', updated_at: new Date() })
+        .returning('*');
+      res.json(transfer);
+    } catch (err) { next(err); }
+  }
+);
+
 // PATCH /api/transfers/:id/approve
 router.patch('/:id/approve', requirePermission('transfers', 'approve'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { action } = z.object({ action: z.enum(['approved', 'rejected']) }).parse(req.body);
+      const body = z.object({
+        action:             z.enum(['approved', 'rejected']),
+        approvalComment:    z.string().max(1000).optional(),
+        approvalSignature:  z.string().optional(),
+        approvalRole:       z.string().max(200).optional(),
+        approvalDate:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      }).parse(req.body);
+
       const [transfer] = await db('transfers')
         .where('id', req.params.id)
         .update({
-          status: action,
-          approved_by: req.user!.userId,
-          approved_at: new Date(),
-          updated_at: new Date(),
+          status:             body.action,
+          approved_by:        req.user!.userId,
+          approved_at:        new Date(),
+          approval_comment:   body.approvalComment   ?? null,
+          approval_signature: body.approvalSignature ?? null,
+          approval_role:      body.approvalRole      ?? null,
+          approval_date:      body.approvalDate      ?? null,
+          updated_at:         new Date(),
         })
         .returning('*');
       if (!transfer) throw new AppError(404, 'Transfer not found');
       res.json(transfer);
+    } catch (err) { next(err); }
+  }
+);
+
+// DELETE /api/transfers/:id  –  permanently delete a transfer record
+router.delete('/:id', requirePermission('transfers', 'delete'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const deleted = await db('transfers').where('id', req.params.id).del();
+      if (!deleted) throw new AppError(404, 'Transfer not found');
+      res.status(204).end();
     } catch (err) { next(err); }
   }
 );

@@ -99,7 +99,7 @@ export default function ProfileTab() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>SAK Staff Profiling System v1.0.0</Text>
+      <Text style={styles.version}>SAK Staffing v1.0.0</Text>
     </ScrollView>
   );
 }

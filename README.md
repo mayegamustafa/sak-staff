@@ -1,4 +1,4 @@
-# SAK Staff Profiling System
+# SAK Staffing
 
 > **Sir Apollo Kaggwa Schools** — Digital staff management platform  
 > Web app (PWA) · Electron desktop · Node.js backend
@@ -148,17 +148,17 @@ npm run build --workspace=packages/desktop
 
 **Linux AppImage** (no install needed — just run it):
 ```bash
-chmod +x "SAK Staff System-1.0.0.AppImage"
-./"SAK Staff System-1.0.0.AppImage"
+chmod +x "SAK-Staffing-1.0.0-x86_64.AppImage"
+./"SAK-Staffing-1.0.0-x86_64.AppImage"
 ```
 
 **Linux .deb** (installs to `/opt/`, adds launcher to application menu):
 ```bash
-sudo dpkg -i "sak-staff-system_1.0.0_amd64.deb"
+sudo dpkg -i "SAK-Staffing-1.0.0-amd64.deb"
 ```
 
 **Windows** — double-click the `*Setup*.exe` → follow the installer wizard.  
-The app appears in the Start menu as **SAK Staff System**.
+The app appears in the Start menu as **SAK Staffing**.
 
 ### macOS `.icns` icon (run on a Mac)
 ```bash

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react';
+import { UserPlus, ToggleLeft, ToggleRight, ShieldCheck, KeyRound } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { formatDate } from '@sak/shared';
 
@@ -13,6 +13,8 @@ interface User {
   created_at: string;
   role_name: string;
   role_slug: string;
+  locked_until?: string | null;
+  must_change_password?: boolean;
 }
 
 interface Role { id: string; name: string; slug: string }
@@ -28,6 +30,9 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formErr, setFormErr] = useState('');
+  const [resetFor, setResetFor] = useState<User | null>(null);
+  const [resetPw, setResetPw] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
 
   const canCreate = hasPermission('user_management', 'create');
   const canUpdate = hasPermission('user_management', 'update');
@@ -72,6 +77,18 @@ export default function UsersPage() {
   const toggleUser = useMutation({
     mutationFn: (id: string) => window.sakAPI.users.toggleActive(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (e: any) => alert(e?.response?.data?.message ?? 'Update failed'),
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: () => window.sakAPI.users.resetPassword(resetFor!.id, resetPw),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      setResetFor(null);
+      setResetPw('');
+      setResetMsg('');
+    },
+    onError: (e: any) => setResetMsg(e?.response?.data?.message ?? 'Reset failed'),
   });
 
   if (!hasPermission('user_management', 'read')) {
@@ -157,8 +174,23 @@ export default function UsersPage() {
                       ? <span className="badge-active">Active</span>
                       : <span className="badge-inactive">Inactive</span>
                     }
+                    {u.locked_until && new Date(u.locked_until) > new Date() && (
+                      <span className="ml-1 text-xs text-red-500" title="Locked after repeated failed sign-ins">Locked</span>
+                    )}
+                    {u.must_change_password && (
+                      <span className="block text-[11px] text-amber-500">Must change password</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
+                    {canUpdate && (
+                      <button
+                        onClick={() => { setResetMsg(''); setResetPw(''); setResetFor(u); }}
+                        className="p-1.5 text-slate-400 hover:text-brand-500 transition-colors"
+                        title="Reset password / unlock"
+                      >
+                        <KeyRound size={16} />
+                      </button>
+                    )}
                     {canUpdate && (
                       <button
                         onClick={() => toggleUser.mutate(u.id)}
@@ -175,6 +207,37 @@ export default function UsersPage() {
           </table>
         </div>
       </div>
+
+      {/* ── Reset Password Modal ───────────────────────────────────────────── */}
+      {resetFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Reset password – {resetFor.username}</h2>
+              <button onClick={() => setResetFor(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none">&times;</button>
+            </div>
+            <form className="p-5 space-y-4" onSubmit={(e) => { e.preventDefault(); resetPassword.mutate(); }}>
+              <div>
+                <label className="label">Temporary password *</label>
+                <input className="input" type="password" required minLength={10} autoComplete="new-password"
+                  value={resetPw} onChange={(e) => setResetPw(e.target.value)}
+                  placeholder="At least 10 chars, a letter and a number" />
+              </div>
+              <p className="text-xs text-slate-400">
+                This also unlocks the account and signs the user out everywhere. They must choose a new password at next sign-in.
+                Give them the temporary password in person or by phone, not by email.
+              </p>
+              {resetMsg && <p className="text-red-400 text-sm">{resetMsg}</p>}
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" className="btn-secondary" onClick={() => setResetFor(null)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={resetPassword.isPending}>
+                  {resetPassword.isPending ? 'Resetting…' : 'Reset password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Add User Modal ─────────────────────────────────────────────────── */}
       {showModal && (
@@ -198,8 +261,9 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="label">Password *</label>
-                <input className="input" type="password" required minLength={8} value={form.password} onChange={set('password')}
-                  placeholder="Min. 8 characters" />
+                <input className="input" type="password" required minLength={10} autoComplete="new-password" value={form.password} onChange={set('password')}
+                  placeholder="Temporary – at least 10 chars, a letter and a number" />
+                <p className="text-xs text-slate-400 mt-1">The user will be asked to choose their own password at first sign-in.</p>
               </div>
               <div>
                 <label className="label">Role *</label>

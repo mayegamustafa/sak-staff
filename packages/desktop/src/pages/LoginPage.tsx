@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import InstallBanner from '../components/InstallBanner';
+import { apiLogin } from '../lib/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { setUser } = useAuthStore();
+  const { setUser, setMustChangePassword } = useAuthStore();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -16,9 +19,11 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const result = await window.sakAPI.auth.login(username, password);
+      const result = await apiLogin(username, password);
       if (result.success && result.user) {
         setUser(result.user, result.permissions ?? []);
+        setMustChangePassword(!!((result as { mustChangePassword?: boolean }).mustChangePassword
+          ?? (result.user as { mustChangePassword?: boolean }).mustChangePassword));
         navigate('/dashboard');
       } else {
         setError(result.message || 'Login failed');
@@ -40,7 +45,7 @@ export default function LoginPage() {
             <img src="/sak.jpg" alt="Sir Apollo Kaggwa Schools" className="w-20 h-20 rounded-2xl object-cover shadow-lg shadow-brand-900/50 ring-2 ring-brand-500/30" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Sir Apollo Kaggwa Schools</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Staff Profiling System</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Staffing</p>
         </div>
 
         {/* Form */}
@@ -59,14 +64,24 @@ export default function LoginPage() {
           </div>
           <div>
             <label className="label">Password</label>
-            <input
-              type="password"
-              className="input"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="input pr-10"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           {error && (

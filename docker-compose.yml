@@ -1,0 +1,94 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SAK Staffing – production stack for any Linux server (VPS, school server, cloud VM)
+#
+#   caddy  → HTTPS on ports 80/443 (automatic Let's Encrypt certificates)
+#   app    → the API + web app, reachable only from caddy
+#   db     → PostgreSQL, reachable only from app
+#
+# Step-by-step guide: docs/KVM-SETUP.md
+#
+#   cp .env.docker.example .env.docker      # fill in every value
+#   docker compose --env-file .env.docker up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+name: sak-staffing
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sak_staff
+      POSTGRES_USER: sak_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.docker}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sak_admin -d sak_staff"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No published port: the database is reachable only from the app container.
+
+  app:
+    build: .
+    image: sak-staffing-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgres://sak_admin:${DB_PASSWORD}@db:5432/sak_staff
+      DB_SSL: "false"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.docker}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env.docker}
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env.docker}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: "1"                  # caddy is the one proxy in front
+      UPLOAD_DIR: /data/uploads
+      DOWNLOADS_DIR: /data/downloads
+      LOG_TO_FILE: "false"
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    volumes:
+      - uploads:/data/uploads
+      # Desktop installers offered on the login page. Copy .deb/.exe/.AppImage
+      # files into ./downloads on the server; the app only reads them.
+      - ./downloads:/data/downloads:ro
+    expose:
+      - "4000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # TLS certificates – keep this volume
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  db_data:
+  uploads:
+  caddy_data:
+  caddy_config:

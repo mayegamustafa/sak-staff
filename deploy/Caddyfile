@@ -1,0 +1,17 @@
+# HTTPS front door for SAK Staffing. Caddy obtains and renews the Let's Encrypt
+# certificate for $DOMAIN automatically and redirects HTTP to HTTPS.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Staff documents and photos are uploaded through here.
+	request_body {
+		max_size 60MB
+	}
+
+	reverse_proxy app:4000
+
+	log {
+		output stdout
+		format console
+	}
+}

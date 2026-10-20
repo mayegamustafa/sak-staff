@@ -2,21 +2,40 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../db';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, hasPermission } from '../../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
 
+/**
+ * Tables a device may mirror, and the permission needed to read each one.
+ * Every table is filtered by the caller's role – sync must never hand out data
+ * (salaries, documents, appraisals) the user couldn't read through the normal API.
+ */
+const SYNC_TABLES: Record<string, string> = {
+  employees:          'staff_profiles:read',
+  emergency_contacts: 'staff_profiles:read',
+  education_records:  'staff_profiles:read',
+  certifications:     'staff_profiles:read',
+  employments:        'employment:read',
+  salary_records:     'employment:read',
+  transfers:          'transfers:read',
+  appraisals:         'performance:read',
+  kpis:               'performance:read',
+  trainings:          'training:read',
+  documents:          'documents:read',
+};
+
 const SyncBatchSchema = z.object({
   deviceId: z.string().min(1).max(100),
-  lastSyncAt: z.string(),   // ISO timestamp
+  lastSyncAt: z.string().datetime({ offset: true }),
   items: z.array(z.object({
     id: z.string().uuid(),
-    table: z.string(),
-    recordId: z.string(),
+    table: z.string().max(64),
+    recordId: z.string().max(100),
     operation: z.enum(['create', 'update', 'delete']),
     payload: z.record(z.unknown()),
-  })),
+  })).max(500),
 });
 
 // POST /api/sync  – device pushes local changes
@@ -26,14 +45,17 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     // Register / update device
     const existing = await db('devices').where('id', deviceId).first();
+    if (existing && existing.user_id && existing.user_id !== req.user!.userId) {
+      return res.status(403).json({ message: 'Device is registered to another user' });
+    }
     if (existing) {
       await db('devices').where('id', deviceId).update({ last_sync_at: new Date(), updated_at: new Date() });
     } else {
       await db('devices').insert({
         id: deviceId,
         user_id: req.user!.userId,
-        platform: req.headers['x-platform'] || 'unknown',
-        device_name: req.headers['x-device-name'] || 'Unknown Device',
+        platform: String(req.headers['x-platform'] || 'unknown').slice(0, 50),
+        device_name: String(req.headers['x-device-name'] || 'Unknown Device').slice(0, 100),
         last_sync_at: new Date(),
       });
     }
@@ -43,6 +65,10 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     // Process each item in the batch
     for (const item of items) {
+      if (!Object.prototype.hasOwnProperty.call(SYNC_TABLES, item.table)) {
+        rejected.push({ id: item.id, reason: 'Unknown table' });
+        continue;
+      }
       try {
         await db('sync_queue').insert({
           id: item.id,
@@ -55,21 +81,17 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
           synced_at: new Date(),
         }).onConflict('id').merge();
         accepted.push(item.id);
-      } catch (err: unknown) {
-        rejected.push({ id: item.id, reason: err instanceof Error ? err.message : 'Unknown error' });
+      } catch {
+        // Don't echo database error text (schema details) back to the client.
+        rejected.push({ id: item.id, reason: 'Could not record change' });
       }
     }
 
     // Pull server updates since lastSyncAt
     const serverTimestamp = new Date().toISOString();
-    const tables = [
-      'employees', 'emergency_contacts', 'education_records', 'certifications',
-      'employments', 'salary_records', 'transfers', 'appraisals', 'kpis',
-      'trainings', 'documents',
-    ] as const;
-
     const serverUpdates: Record<string, unknown[]> = {};
-    for (const table of tables) {
+    for (const [table, perm] of Object.entries(SYNC_TABLES)) {
+      if (!hasPermission(req.user, perm)) { serverUpdates[table] = []; continue; }
       serverUpdates[table] = await db(table)
         .where('updated_at', '>', lastSyncAt)
         .select('*');

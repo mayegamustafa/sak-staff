@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { ROLES, ROLE_PERMISSIONS } from '@sak/shared';
 
 const ROLES_DATA = [
@@ -53,6 +54,16 @@ const PERMISSIONS_DATA = [
   // System Settings
   { module_key: 'system_settings', action: 'read' },
   { module_key: 'system_settings', action: 'update' },
+  // Campus Management (stations, departments, classes, staffing establishment)
+  { module_key: 'campus_management', action: 'create' },
+  { module_key: 'campus_management', action: 'read' },
+  { module_key: 'campus_management', action: 'update' },
+  { module_key: 'campus_management', action: 'delete' },
+  // Attendance
+  { module_key: 'attendance', action: 'create' },
+  { module_key: 'attendance', action: 'read' },
+  { module_key: 'attendance', action: 'update' },
+  { module_key: 'attendance', action: 'delete' },
 ];
 
 const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
@@ -65,17 +76,22 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     'training:create', 'training:read', 'training:update',
     'documents:create', 'documents:read', 'documents:update', 'documents:delete',
     'reports:read', 'reports:export',
+    'campus_management:read',
+    'attendance:create', 'attendance:read', 'attendance:update', 'attendance:delete',
   ],
   quality_head: [
     'staff_profiles:read', 'employment:read', 'transfers:read',
     'performance:create', 'performance:read', 'performance:update', 'performance:delete',
     'training:create', 'training:read', 'training:update',
     'documents:read', 'reports:read', 'reports:export',
+    'attendance:create', 'attendance:read', 'attendance:update', 'attendance:delete',
   ],
   general_manager: [
-    'staff_profiles:read', 'employment:read', 'transfers:read', 'transfers:approve',
+    'staff_profiles:read', 'employment:read',
+    'transfers:create', 'transfers:read', 'transfers:update', 'transfers:approve', 'transfers:delete',
     'performance:read', 'training:read', 'documents:read',
     'reports:read', 'reports:export',
+    'attendance:read',
   ],
   campus_admin: ['staff_profiles:read'],
 };
@@ -113,14 +129,23 @@ export async function seed(knex: Knex): Promise<void> {
   // Default Super Admin user
   const existing = await knex('users').where('username', 'superadmin').first();
   if (!existing) {
-    const hash = await bcrypt.hash('Admin@SAK2026', 12);
+    // Never ship a fixed default password. Use SEED_ADMIN_PASSWORD if given,
+    // otherwise generate one and print it once. Either way the account must
+    // change it on first login.
+    const password = process.env.SEED_ADMIN_PASSWORD || randomBytes(12).toString('base64url');
+    const hash = await bcrypt.hash(password, 12);
     await knex('users').insert({
       username: 'superadmin',
       email: 'admin@sakaggwa.ac.ug',
       password_hash: hash,
       role_id: roleMap['super_admin'],
       is_active: true,
+      must_change_password: true,
     });
+    if (!process.env.SEED_ADMIN_PASSWORD) {
+      // eslint-disable-next-line no-console
+      console.log(`\n  Created user "superadmin" with temporary password: ${password}\n  You will be asked to change it on first login.\n`);
+    }
   }
 
   // Default campus

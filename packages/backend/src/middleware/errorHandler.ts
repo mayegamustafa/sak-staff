@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { MulterError } from 'multer';
 import { logger } from '../utils/logger';
 
 export class AppError extends Error {
@@ -35,7 +36,20 @@ export function errorHandler(
     return;
   }
 
-  // Unknown error
-  logger.error(err);
+  // Upload errors (file too large, too many files…)
+  if (err instanceof MulterError) {
+    res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ message: err.message });
+    return;
+  }
+
+  // body-parser and other http-errors style client errors (bad JSON, payload too large)
+  const status = (err as { status?: number; statusCode?: number }).status ?? (err as { statusCode?: number }).statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    res.status(status).json({ message: status === 413 ? 'Request too large' : 'Bad request' });
+    return;
+  }
+
+  // Unknown error – log details server-side only; never leak them to the client.
+  logger.error(`${req.method} ${req.originalUrl}: ${err.stack || err.message}`);
   res.status(500).json({ message: 'Internal server error' });
 }

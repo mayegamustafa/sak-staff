@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 
@@ -18,7 +18,7 @@ function ReportHeader({ title }: { title: string }) {
       </div>
       <div className="ml-auto text-right text-xs text-gray-400">
         <p>Generated: {new Date().toLocaleString()}</p>
-        <p>SAK Staff Profiling System</p>
+        <p>SAK Staffing</p>
       </div>
     </div>
   );
@@ -222,23 +222,25 @@ function PerformanceRankingReport() {
     queryKey: ['reports', 'performance-ranking'],
     queryFn: () => window.sakAPI.reports.performanceRanking(),
   });
-  const rows = data as { employee_name: string; staff_no: string; avg_score: number; appraisal_count: number }[];
+  const rows = data as { employee_name: string; staff_no: string; avg_score: number; appraisal_count: number; category_label?: string; system?: string }[];
 
   if (isLoading) return <p className="text-slate-500 text-sm">Loading…</p>;
+
+  const isDynamic = rows.length > 0 && rows[0].system === 'dynamic';
 
   return (
     <div className="card p-0 overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
           <tr>
-            {['Rank', 'Staff', 'Avg Score', 'Appraisals'].map((h) => (
+            {['Rank', 'Staff', isDynamic ? 'Avg Score %' : 'Avg Score', 'Appraisals', ...(isDynamic ? ['Category'] : [])].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
           {rows.map((r, i) => (
-            <tr key={r.staff_no} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+            <tr key={r.staff_no || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
               <td className="px-4 py-3 text-slate-500 font-mono">#{i + 1}</td>
               <td className="px-4 py-3">
                 <p className="text-slate-800 dark:text-slate-100">{r.employee_name}</p>
@@ -246,9 +248,20 @@ function PerformanceRankingReport() {
               </td>
               <td className="px-4 py-3">
                 <span className="text-brand-400 font-bold text-lg">{Number(r.avg_score).toFixed(1)}</span>
-                <span className="text-slate-500 text-xs">/5</span>
+                <span className="text-slate-500 text-xs">{isDynamic ? '%' : '/5'}</span>
               </td>
               <td className="px-4 py-3 text-slate-400">{r.appraisal_count}</td>
+              {isDynamic && (
+                <td className="px-4 py-3">
+                  {r.category_label ? (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      r.category_label === 'ACHIEVED' ? 'bg-emerald-900/60 text-emerald-400' :
+                      r.category_label === 'PROMISING' ? 'bg-amber-900/60 text-amber-400' :
+                      'bg-red-900/60 text-red-400'
+                    }`}>{r.category_label}</span>
+                  ) : '—'}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

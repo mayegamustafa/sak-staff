@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Users, ArrowLeftRight, BarChart2,
   BookOpen, FileText, LayoutDashboard, Settings,
-  LogOut, RefreshCw, Wifi, WifiOff, Menu, X, Sun, Moon, Monitor, Building2, AlertTriangle
+  LogOut, KeyRound, RefreshCw, Wifi, WifiOff, Menu, X, Sun, Moon, Monitor, Building2, AlertTriangle,
+  Link2, FileSpreadsheet, ClipboardCheck, CalendarDays, TrendingUp
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useSyncStore } from '../store/syncStore';
 import { useThemeStore, type Theme } from '../store/themeStore';
 import { clsx } from 'clsx';
 import InstallBanner from './InstallBanner';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const nav = [
   { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard',   perm: null },
@@ -17,14 +20,21 @@ const nav = [
   { to: '/transfers',   icon: ArrowLeftRight,   label: 'Transfers',   perm: 'transfers:read' },
   { to: '/performance', icon: BarChart2,         label: 'Performance', perm: 'performance:read' },
   { to: '/training',    icon: BookOpen,          label: 'Training',    perm: 'training:read' },
-  { to: '/staff-gaps',  icon: AlertTriangle,     label: 'Staff Gaps',  perm: null },
+  { to: '/attendance',  icon: CalendarDays,      label: 'Attendance',  perm: 'attendance:read' },
+  { to: '/analytics',   icon: TrendingUp,        label: 'Analytics',   perm: null },
+  { to: '/staff-gaps',       icon: AlertTriangle,    label: 'Staff Gaps',  perm: null },
+  { to: '/onboarding-links',   icon: Link2,            label: 'Onboarding',  perm: 'staff_profiles:create' },
+  { to: '/bulk-import',         icon: FileSpreadsheet,  label: 'Bulk Import', perm: 'staff_profiles:create' },
+  { to: '/pending-approvals',   icon: ClipboardCheck,   label: 'Approvals',   perm: 'staff_profiles:update' },
   { to: '/reports',     icon: FileText,          label: 'Reports',     perm: 'reports:read' },
   { to: '/campuses',    icon: Building2,         label: 'Settings',    perm: null },
   { to: '/users',       icon: Settings,          label: 'Users',       perm: 'user_management:read' },
 ];
 
 export default function Layout() {
-  const { user, permissions, logout } = useAuthStore();
+  const { user, permissions, logout, mustChangePassword, setMustChangePassword } = useAuthStore();
+  const [showChangePw, setShowChangePw] = useState(false);
+  const queryClient = useQueryClient();
   const { syncStatus, triggerSync } = useSyncStore();
   const { theme, setTheme } = useThemeStore();
   const navigate = useNavigate();
@@ -58,7 +68,7 @@ export default function Layout() {
           <img src="/sak.jpg" alt="SAK" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest leading-none">SAK Schools</p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate">Staff System</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white leading-tight truncate">Staffing</p>
             <p className="text-[9px] text-slate-400 dark:text-slate-500">Since 1996</p>
           </div>
         </div>
@@ -146,7 +156,7 @@ export default function Layout() {
           {/* Logo — mobile only (desktop has sidebar) */}
           <div className="md:hidden flex items-center gap-2 min-w-0">
             <img src="/sak.jpg" alt="SAK" className="w-6 h-6 rounded object-cover" />
-            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">SAK Staff</span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">SAK Staffing</span>
           </div>
 
           <div className="flex-1" />
@@ -185,12 +195,30 @@ export default function Layout() {
             <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
               {user?.username?.charAt(0).toUpperCase()}
             </div>
+            <button onClick={() => setShowChangePw(true)} title="Change password"
+              className="p-1.5 text-slate-400 hover:text-brand-500 transition-colors rounded">
+              <KeyRound size={15} />
+            </button>
             <button onClick={handleLogout} title="Sign out"
               className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded">
               <LogOut size={15} />
             </button>
           </div>
         </header>
+
+        {(mustChangePassword || showChangePw) && (
+          <ChangePasswordModal
+            forced={mustChangePassword}
+            onDone={() => {
+              setMustChangePassword(false);
+              setShowChangePw(false);
+              // Requests refused while the password change was pending can now succeed.
+              queryClient.invalidateQueries();
+            }}
+            onCancel={() => setShowChangePw(false)}
+            onSignOut={handleLogout}
+          />
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

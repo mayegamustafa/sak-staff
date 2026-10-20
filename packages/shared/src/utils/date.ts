@@ -44,8 +44,15 @@ export function isExpired(iso: string): boolean {
 }
 
 /**
- * Generate SAK staff number: SAK-YYYY-NNNN
+ * Generate SAK staff number: SAK-[CAMPUS]-YYYY-NNNN
+ * Examples: SAK-MN-2026-0001  /  SAK-2026-0001 (no campus)
+ * campusCode: raw campus code from DB — any "SAK-" prefix is stripped, max 6 chars used.
  */
-export function generateStaffNo(year: number, sequence: number): string {
-  return `SAK-${year}-${String(sequence).padStart(4, '0')}`;
+export function generateStaffNo(year: number, sequence: number, campusCode?: string | null): string {
+  const seq = String(sequence).padStart(4, '0');
+  if (campusCode) {
+    const code = campusCode.replace(/^SAK[-/]/i, '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (code) return `SAK-${code}-${year}-${seq}`;
+  }
+  return `SAK-${year}-${seq}`;
 }

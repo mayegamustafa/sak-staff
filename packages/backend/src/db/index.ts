@@ -1,16 +1,10 @@
 import knex from 'knex';
-import { config } from '../config';
+import { buildConnection, pool } from './connection';
 
 const db = knex({
   client: 'pg',
-  connection: {
-    host: config.db.host,
-    port: config.db.port,
-    database: config.db.name,
-    user: config.db.user,
-    password: config.db.password,
-  },
-  pool: { min: 2, max: 10 },
+  connection: buildConnection(),
+  pool,
   migrations: {
     tableName: 'knex_migrations',
     directory: './migrations',

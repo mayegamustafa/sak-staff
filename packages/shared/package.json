@@ -1,7 +1,7 @@
 {
   "name": "@sak/shared",
   "version": "1.0.0",
-  "description": "Shared types, constants and utilities for SAK Staff System",
+  "description": "Shared types, constants and utilities for SAK Staffing",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

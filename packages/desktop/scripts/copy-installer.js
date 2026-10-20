@@ -13,6 +13,7 @@ const RELEASE_DIR   = path.join(__dirname, '..', 'release');
 const DOWNLOADS_DIR = path.join(__dirname, '..', '..', 'backend', 'downloads');
 
 const EXTENSIONS = ['.AppImage', '.deb', '.exe', '.dmg'];
+const META_EXTS  = ['.yml', '.yaml'];
 
 if (!fs.existsSync(RELEASE_DIR)) {
   console.log('[copy-installer] No release/ directory found – skipping.');
@@ -37,10 +38,10 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-// Clean old installers from downloads dir
+// Clean old installers and meta from downloads dir
 const existing = fs.readdirSync(DOWNLOADS_DIR);
 existing.forEach(f => {
-  if (EXTENSIONS.some(ext => f.endsWith(ext))) {
+  if (EXTENSIONS.some(ext => f.endsWith(ext)) || META_EXTS.some(ext => f.endsWith(ext))) {
     fs.unlinkSync(path.join(DOWNLOADS_DIR, f));
     console.log(`[copy-installer] Removed old: ${f}`);
   }
@@ -56,3 +57,11 @@ for (const file of files) {
 }
 
 console.log('[copy-installer] Done.');
+
+// Also copy .yml update metadata files (latest-linux.yml, latest.yml, etc.)
+const metaFiles = fs.readdirSync(RELEASE_DIR)
+  .filter(f => META_EXTS.some(ext => f.endsWith(ext)));
+for (const mf of metaFiles) {
+  fs.copyFileSync(path.join(RELEASE_DIR, mf), path.join(DOWNLOADS_DIR, mf));
+  console.log(`[copy-installer] Copied meta → backend/downloads/${mf}`);
+}
